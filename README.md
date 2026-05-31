@@ -28,8 +28,8 @@ This microservice is built for high concurrency, low latency, and secure deploym
 ## 🛠️ Quick Start (Docker Deployment)
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/TalGold01/Enterprise-RAG-Microservice.git](https://github.com/TalGold01/Enterprise-RAG-Microservice.git)
-cd Enterprise-RAG-Microservice
+git clone [https://github.com/TalGold01/fastapi-llama3.1-rag.git](https://github.com/TalGold01/fastapi-llama3.1-rag.git)
+cd fastapi-llama3.1-rag
 
 # 2. Build the Docker Container
 docker build -t local-rag-api .
