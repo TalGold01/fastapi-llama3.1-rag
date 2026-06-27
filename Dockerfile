@@ -4,9 +4,10 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies required for FAISS and compiling embeddings
+# Install system dependencies required for FAISS, compiling embeddings, and healthchecks
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker layer caching

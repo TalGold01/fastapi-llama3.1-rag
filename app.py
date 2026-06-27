@@ -7,6 +7,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # --- App Initialization ---
 app = FastAPI(
@@ -35,15 +36,25 @@ def initialize_rag_pipeline():
         llm = Ollama(model=MODEL_NAME, base_url=OLLAMA_BASE_URL)
         embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         
-        # 2. Initialize FAISS Vector Store
-        sample_texts = [
-            "The main server rack requires 220V power.", 
-            "Active Directory policies dictate 90-day password rotations."
+        # 2. Raw Enterprise Documents (Simulated)
+        raw_documents = [
+            "The main server rack requires 220V power. Ensure the UPS is connected before booting the primary domain controller.", 
+            "Active Directory policies dictate 90-day password rotations. Service accounts are exempt but require 256-bit AES encryption keys."
         ]
-        vector_db = FAISS.from_texts(sample_texts, embeddings)
+        
+        # 3. ADVANCED CHUNKING STRATEGY
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len
+        )
+        split_docs = text_splitter.create_documents(raw_documents)
+        
+        # 4. Initialize FAISS Vector Store with chunked documents
+        vector_db = FAISS.from_documents(split_docs, embeddings)
         retriever = vector_db.as_retriever(search_kwargs={"k": 2})
         
-        # 3. Strict System Prompt
+        # 5. Strict System Prompt
         prompt_template = """
         Use the following pieces of retrieved context to answer the question. 
         If you don't know the answer, just say that you don't know. Do NOT make up an answer.
@@ -54,11 +65,11 @@ def initialize_rag_pipeline():
         Helpful Answer:"""
         PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
         
-        # 4. Helper to format retrieved documents
+        # 6. Helper to format retrieved documents
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
 
-        # 5. Build the Modern LCEL Pipeline (Replacing legacy RetrievalQA)
+        # 7. Build the Modern LCEL Pipeline
         rag_chain = (
             {"context": retriever | format_docs, "question": RunnablePassthrough()}
             | PROMPT
