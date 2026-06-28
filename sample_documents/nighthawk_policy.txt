@@ -1,0 +1,1 @@
+Nighthawk Protocol (v2.4) - Security Guidelines: All outbound firewall configurations must route through the internal VPN proxy (Gateway: 10.0.0.1) before hitting the public subnet. Direct public internet access is strictly prohibited for backend compute nodes.

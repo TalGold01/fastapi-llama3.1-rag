@@ -1,19 +1,22 @@
 import os
-from fastapi import FastAPI, HTTPException
+import tempfile
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
 # --- App Initialization ---
 app = FastAPI(
     title="Enterprise RAG API",
     description="Secure, local Document Retrieval and LLM Generation via Llama 3.1",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # --- Global State & Configuration ---
@@ -25,21 +28,16 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 class QueryRequest(BaseModel):
     question: str
 
-class QueryResponse(BaseModel):
-    answer: str
-    source_documents: list[str]
-
 # --- AI Pipeline Initialization ---
 def initialize_rag_pipeline():
     try:
         # 1. Initialize Local LLM & Embeddings
-        llm = Ollama(model=MODEL_NAME, base_url=OLLAMA_BASE_URL)
+        llm = OllamaLLM(model=MODEL_NAME, base_url=OLLAMA_BASE_URL)
         embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         
-        # 2. Raw Enterprise Documents (Simulated)
+        # 2. Seed Document (FAISS requires at least one document to initialize)
         raw_documents = [
-            "The main server rack requires 220V power. Ensure the UPS is connected before booting the primary domain controller.", 
-            "Active Directory policies dictate 90-day password rotations. Service accounts are exempt but require 256-bit AES encryption keys."
+            "System Initialization Document: This enterprise RAG system is currently active, secure, and awaiting enterprise document ingestion."
         ]
         
         # 3. ADVANCED CHUNKING STRATEGY
@@ -50,9 +48,9 @@ def initialize_rag_pipeline():
         )
         split_docs = text_splitter.create_documents(raw_documents)
         
-        # 4. Initialize FAISS Vector Store with chunked documents
+        # 4. Initialize FAISS Vector Store
         vector_db = FAISS.from_documents(split_docs, embeddings)
-        retriever = vector_db.as_retriever(search_kwargs={"k": 2})
+        retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         
         # 5. Strict System Prompt
         prompt_template = """
@@ -77,14 +75,16 @@ def initialize_rag_pipeline():
             | StrOutputParser()
         )
         
-        return rag_chain, retriever
+        # We now return the vector_db and text_splitter so the /upload route can access them globally
+        return rag_chain, retriever, vector_db, text_splitter
         
     except Exception as e:
         print(f"Failed to initialize RAG pipeline: {e}")
-        return None, None
+        return None, None, None, None
 
-# Load the chain into memory on startup
-rag_chain, retriever = initialize_rag_pipeline()
+# Load the chain and database into memory on startup
+rag_chain, retriever, vector_db, text_splitter = initialize_rag_pipeline()
+
 
 # --- API Endpoints ---
 @app.get("/health")
@@ -94,29 +94,73 @@ async def health_check():
         raise HTTPException(status_code=503, detail="AI Pipeline not initialized")
     return {"status": "healthy", "model": MODEL_NAME}
 
-@app.post("/query", response_model=QueryResponse)
-async def process_query(req: QueryRequest):
+
+@app.post("/upload")
+async def upload_document(file: UploadFile = File(...)):
     """
-    Retrieves context using FAISS, formats it via LCEL, 
-    and generates an answer securely.
+    Ingests PDF or TXT files, chunks them, and adds them to the live FAISS vector database.
+    """
+    if not vector_db:
+        raise HTTPException(status_code=500, detail="Vector Database not initialized")
+    
+    try:
+        suffix = os.path.splitext(file.filename)[1].lower()
+        if suffix not in ['.pdf', '.txt']:
+            raise HTTPException(status_code=400, detail="Only .pdf and .txt files are supported")
+
+        # Save uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+        
+        # Load the document based on extension
+        if suffix == '.pdf':
+            loader = PyPDFLoader(tmp_path)
+        else:
+            loader = TextLoader(tmp_path)
+            
+        documents = loader.load()
+        
+        # Chunk the documents and add to FAISS
+        split_docs = text_splitter.split_documents(documents)
+        vector_db.add_documents(split_docs)
+        
+        # Clean up temp file
+        os.remove(tmp_path)
+        
+        return {"message": f"Successfully ingested {file.filename}. Added {len(split_docs)} vector chunks to the database."}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Document ingestion failed: {str(e)}")
+
+
+@app.post("/query")
+async def process_query_stream(req: QueryRequest):
+    """
+    Streams the LLM generation back to the client token-by-token.
+    Appends the retrieved source citations at the end of the stream.
     """
     if not rag_chain or not retriever:
         raise HTTPException(status_code=500, detail="AI Service is currently unavailable")
     
-    try:
-        # 1. Fetch sources directly for citations
+    async def generate_response():
+        # 1. Stream the LLM response natively
+        async for chunk in rag_chain.astream(req.question):
+            yield chunk
+            
+        # 2. Append the exact sources used to the end of the stream
+        yield "\n\n--- CITED SOURCES ---\n"
         docs = retriever.invoke(req.question)
-        sources = [doc.page_content for doc in docs]
-        
-        # 2. Generate the LLM answer using the LCEL chain
-        answer = rag_chain.invoke(req.question)
-        
-        return QueryResponse(
-            answer=answer,
-            source_documents=sources
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if not docs:
+            yield "No external documents retrieved."
+        else:
+            for i, doc in enumerate(docs):
+                # Clean up newlines for cleaner output and truncate for readability
+                clean_content = doc.page_content.replace('\n', ' ')[:250]
+                yield f"[{i+1}] {clean_content}...\n"
+
+    # Return the generator as a StreamingResponse
+    return StreamingResponse(generate_response(), media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn

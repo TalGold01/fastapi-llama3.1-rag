@@ -1,11 +1,18 @@
-version: '3.8'
-
 services:
   rag-backend:
     build: .
     container_name: rag-fastapi-engine
-    network_mode: "host"
+    networks:
+      - secure_airgap_net
+    ports:
+      - "8000:8000"
     restart: always
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_CACHE=/app/model_cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -15,3 +22,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+networks:
+  secure_airgap_net:
+    driver: bridge
+    internal: true
