@@ -22,9 +22,10 @@ This project utilizes a modern microservice architecture, separating the inferen
   * *Why:* The backend is secured inside an isolated `internal: true` Docker bridge network, enforcing strict air-gapped constraints and avoiding the vulnerabilities of host network modes.
 
 ## 🚀 How the RAG Pipeline Works
-1. **Dynamic Ingestion:** Domain-specific documents (.pdf, .txt) are uploaded at runtime via the `/upload` API, chunked using a `RecursiveCharacterTextSplitter`, and embedded into the active FAISS instance.
-2. **Retrieval:** When a user submits a query, the FastAPI backend converts it to a vector and retrieves the top-K most semantically relevant chunks.
-3. **Asynchronous Generation:** The context is injected into a strict system prompt and sent to the local Llama 3.1 model. The response is streamed back token-by-token, effectively eliminating hallucinations while providing zero-latency feedback.
+1. **Dynamic Ingestion:** Domain-specific documents (.pdf, .txt) are uploaded at runtime via the `/upload` API, chunked using a `RecursiveCharacterTextSplitter`, and converted into dense vector embeddings using HuggingFace embedding models.
+2. **Storage:** These embeddings are dynamically indexed into the active, in-memory `FAISS` vector database without requiring a system restart.
+3. **Retrieval:** When a user submits a query via the Streamlit UI, the FastAPI backend converts the query to a vector and retrieves the top-K most semantically relevant document chunks.
+4. **Asynchronous Generation:** The retrieved context is injected into a strict system prompt and sent to the local Llama 3.1 model. The response is streamed back token-by-token using `astream()`, effectively eliminating hallucinations while providing zero-latency feedback.
 
 ---
 
