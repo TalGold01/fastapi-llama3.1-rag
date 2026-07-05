@@ -1,7 +1,7 @@
 # Enterprise RAG Microservice: Air-Gapped Document Intelligence
 
 ## 📌 Executive Summary
-This project is a production-ready, fully containerized Retrieval-Augmented Generation (RAG) microservice. It allows enterprise applications to securely query internal, proprietary documents using Large Language Models (LLMs) without exposing sensitive data to external public APIs (like OpenAI or Anthropic). 
+This project is a production-ready, fully containerized Retrieval-Augmented Generation (RAG) microservice. It allows enterprise applications to securely query internal, proprietary documents using Large Language Models (LLMs) without exposing sensitive data to external public APIs (like OpenAI or Anthropic).
 
 By utilizing local model inferencing, decoupled frontend/backend services, and in-memory vector indexing, this architecture ensures zero data leakage. Recent architectural overhauls have introduced asynchronous token streaming for zero-latency UI rendering and a programmatic benchmarking suite to validate enterprise performance metrics.
 
@@ -31,7 +31,7 @@ This project utilizes a modern microservice architecture, separating the inferen
 
 ## 🛠️ Quick Start (Local Deployment)
 
-This application requires three separate services to run simultaneously: the AI Engine, the API Backend, and the UI Frontend. 
+This application requires three separate services to run simultaneously: the AI Engine, the API Backend, and the UI Frontend.
 
 ### Prerequisites
 * Docker and Docker Compose installed.
@@ -76,16 +76,12 @@ The microservice exposes the following programmatic endpoints:
 ---
 
 ## 📊 Observability & Benchmarking
-To validate the performance of the local inference and retrieval pipeline, this repository includes a dedicated latency benchmarking script.
+
+A dedicated benchmarking suite (`benchmark.py`) measures end-to-end Time To First Token (TTFT) across P50/P95/P99 percentiles.
+
+> **Note:** TTFT is hardware-dependent. CPU-only inference (laptop) produces multi-second latency due to the 8B parameter model size. Production deployment on GPU hardware (e.g., AWS g4dn with NVIDIA T4) reduces TTFT to the sub-500ms range. Run `benchmark.py` to measure on your own hardware.
 
 ### Running the Benchmark
 With the backend running, execute the benchmarking suite to stress-test the `/query` endpoint:
-    
-    python benchmark.py
 
-### Metrics Tracked
-The script isolates and measures **Time To First Token (TTFT)** across sequential requests, calculating standard enterprise reliability percentiles:
-* **Average (Mean) Latency**
-* **P50 (Median)**
-* **P95 (Tail Latency)**
-* **P99 (Worst Case)**
+    python benchmark.py

@@ -26,4 +26,4 @@ services:
 networks:
   secure_airgap_net:
     driver: bridge
-    internal: true
+    # internal: true
