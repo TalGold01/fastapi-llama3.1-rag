@@ -11,4 +11,5 @@ sentence-transformers
 faiss-cpu
 pypdf
 streamlit
-requestsnumpy
+requests
+numpy

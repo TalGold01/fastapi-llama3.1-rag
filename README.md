@@ -19,7 +19,7 @@ This project utilizes a modern microservice architecture, separating the inferen
 * **AI Orchestration:** `LangChain (LCEL)`
   * *Why:* Utilizes modern LangChain Expression Language (LCEL) with asynchronous generators (`astream`) for optimized Time To First Token (TTFT).
 * **Containerization & Security:** `Docker` & `Docker Compose`
-  * *Why:* The backend is secured inside an isolated `internal: true` Docker bridge network, enforcing strict air-gapped constraints and avoiding the vulnerabilities of host network modes.
+  * *Why:* The backend is secured inside an isolated Docker bridge network with controlled host access, enforcing strict air-gapped constraints and avoiding the vulnerabilities of host network modes.
 
 ## 🚀 How the RAG Pipeline Works
 1. **Dynamic Ingestion:** Domain-specific documents (.pdf, .txt) are uploaded at runtime via the `/upload` API, chunked using a `RecursiveCharacterTextSplitter`, and converted into dense vector embeddings using HuggingFace embedding models.
